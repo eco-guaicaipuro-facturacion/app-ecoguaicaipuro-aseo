@@ -1,92 +1,70 @@
 import os
-from dotenv import load_dotenv
-import pandas as pd
 from supabase import create_client, Client
+import streamlit as st
 
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# Intentar obtener credenciales desde st.secrets (Streamlit Cloud) o variables de entorno (.env local)
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except Exception:
+    from dotenv import load_dotenv
+    load_dotenv()
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "https://znmpeopnxrgofbyrtih.supabase.co")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("❌ Error crítico: Las credenciales de Supabase no están configuradas en el archivo .env")
+    st.error("⚠️ Faltan las credenciales de Supabase (SUPABASE_URL o SUPABASE_KEY). Configúrelas en los Secrets de Streamlit Cloud o en el archivo .env.")
 
-def init_connection() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-supabase = init_connection()
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_usuarios():
     try:
-        res = supabase.table("usuarios").select("*").execute()
-        return res.data
+        response = supabase.table("usuarios").select("*").execute()
+        return response.data if response.data else []
     except Exception as e:
-        print(f"Error al conectar con la tabla usuarios: {e}")
+        print(f"Error en get_usuarios: {e}")
         return []
 
 def get_suscriptores():
     try:
-        res = supabase.table("suscriptores_inmuebles").select("*").execute()
-        return res.data
+        response = supabase.table("suscriptores_inmuebles").select("*").execute()
+        return response.data if response.data else []
     except Exception as e:
-        print(f"Error al conectar con la tabla suscriptores_inmuebles: {e}")
-        return []
-
-def get_suscriptor_por_cedula(cedula_rif: str):
-    try:
-        res = supabase.table("suscriptores_inmuebles").select("*").eq("cedula_rif", str(cedula_rif).strip()).execute()
-        return res.data
-    except Exception as e:
-        print(f"Error al consultar suscriptor por cédula: {e}")
+        print(f"Error en get_suscriptores: {e}")
         return []
 
 def get_tarifas():
-    """Lee las tarifas directamente del archivo Excel de lectura 'TARIFAS DE ASEO.xlsx'"""
     try:
-        if os.path.exists("TARIFAS DE ASEO.xlsx"):
-            df_tar = pd.read_excel("TARIFAS DE ASEO.xlsx", dtype=str).fillna("")
-            df_tar.columns = [c.strip().lower() for c in df_tar.columns]
-            rename_map = {}
-            for col in df_tar.columns:
-                if "descrip" in col:
-                    rename_map[col] = "descripcion"
-                elif "tipo" in col:
-                    rename_map[col] = "tipo"
-                elif "tasa" in col:
-                    rename_map[col] = "tasa"
-            df_tar = df_tar.rename(columns=rename_map)
-            return df_tar.to_dict(orient="records")
-        else:
-            res = supabase.table("tarifas_aseo").select("*").execute()
-            return res.data
+        response = supabase.table("tarifas_aseo").select("*").execute()
+        return response.data if response.data else []
     except Exception as e:
-        print(f"Error al leer tarifas de aseo: {e}")
+        print(f"Error en get_tarifas: {e}")
         return []
 
 def get_facturacion():
     try:
-        res = supabase.table("facturacion_historial").select("*").execute()
-        return res.data
+        response = supabase.table("facturacion_historial").select("*").execute()
+        return response.data if response.data else []
     except Exception as e:
-        print(f"Error al conectar con la tabla facturacion_historial: {e}")
+        print(f"Error en get_facturacion: {e}")
         return []
 
 def registrar_factura(data):
     try:
-        supabase.table("facturacion_historial").insert(data).execute()
-        return True
+        response = supabase.table("facturacion_historial").insert(data).execute()
+        return response.data
     except Exception as e:
-        print(f"Error al registrar factura: {e}")
-        return False
+        print(f"Error en registrar_factura: {e}")
+        return None
 
 def registrar_auditoria_db(cedula, rol, accion, detalle):
     try:
         data = {
-            "cedula_usuario": str(cedula),
+            "cedula": str(cedula),
             "rol": str(rol),
             "accion": str(accion),
             "detalle": str(detalle)
         }
-        supabase.table("registro_auditoria").insert(data).execute()
+        supabase.table("auditoria").insert(data).execute()
     except Exception as e:
-        pass
+        print(f"Error en auditoría: {e}")
